@@ -835,35 +835,34 @@ unload.MouseButton1Click:Connect(function()
     if gui and gui.Parent then gui:Destroy() end
 end)
 
--- AUTO RELOAD ON PLACE CHANGE (VERSION FIX)
-task.spawn(function()
-    local lastPlace = game.PlaceId
+-- Load in next server
+local loadNext = Instance.new("TextButton")
+loadNext.Size = UDim2.new(1, -20, 0, 30)
+loadNext.Position = UDim2.new(0, 10, 0, 50)
+loadNext.BackgroundColor3 = Color3.fromRGB(200, 120, 40)
+loadNext.Text = "Load in next server: OFF"
+loadNext.TextColor3 = Color3.fromRGB(255, 255, 255)
+loadNext.Font = Enum.Font.GothamBold
+loadNext.TextSize = 14
+loadNext.Parent = pageSettings
+Instance.new("UICorner", loadNext).CornerRadius = UDim.new(0, 6)
 
-    while task.wait(1) do
-        if autoReload then
-            local newPlace = game.PlaceId
+local loadNextEnabled = false
+local scriptURL = "https://raw.githubusercontent.com/Noamist/WTUtility/refs/heads/main/WTUtility_alpha.lua"
 
-            if newPlace ~= lastPlace then
-                lastPlace = newPlace
+loadNext.MouseButton1Click:Connect(function()
+    loadNextEnabled = not loadNextEnabled
 
-                -- Nettoyage avant reload
-                unloaded = true
-                for k in pairs(toggleStates) do toggleStates[k] = false end
-                if gui and gui.Parent then gui:Destroy() end
+    loadNext.Text = loadNextEnabled and "Load in next server: ON" or "Load in next server: OFF"
+    loadNext.BackgroundColor3 = loadNextEnabled
+        and Color3.fromRGB(50, 200, 50)
+        or  Color3.fromRGB(200, 120, 40)
 
-                -- Recharge le script depuis ton URL
-                local url = "https://raw.githubusercontent.com/Noamist/WTUtility/refs/heads/main/WTUtility_alpha.lua"
-                local ok, err = pcall(function()
-                    loadstring(game:HttpGet(url))()
-                end)
-
-                if not ok then
-                    warn("AutoReload error:", err)
-                end
-
-                return -- on quitte ce thread, le nouveau script en recréera un
-            end
-        end
+    if loadNextEnabled then
+        pcall(function()
+            queue_on_teleport(('loadstring(game:HttpGet("%s"))()'):format(scriptURL))
+        end)
     end
 end)
+
 
