@@ -834,3 +834,15 @@ unload.MouseButton1Click:Connect(function()
     for k in pairs(toggleStates) do toggleStates[k] = false end
     if gui and gui.Parent then gui:Destroy() end
 end)
+
+-- AUTO RELOAD ON PLACE CHANGE
+task.spawn(function()
+    local initialPlace = game.PlaceId
+    while task.wait(1) do
+        if autoReload and game.PlaceId ~= initialPlace then
+            -- Recharge le script depuis la source originale
+            loadstring(game:HttpGet(""))()
+            break
+        end
+    end
+end)
