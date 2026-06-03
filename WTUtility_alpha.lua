@@ -835,14 +835,35 @@ unload.MouseButton1Click:Connect(function()
     if gui and gui.Parent then gui:Destroy() end
 end)
 
--- AUTO RELOAD ON PLACE CHANGE
+-- AUTO RELOAD ON PLACE CHANGE (VERSION FIX)
 task.spawn(function()
-    local initialPlace = game.PlaceId
+    local lastPlace = game.PlaceId
+
     while task.wait(1) do
-        if autoReload and game.PlaceId ~= initialPlace then
-            -- Recharge le script depuis la source originale
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/Noamist/WTUtility/refs/heads/main/WTUtility_alpha.lua"))()
-            break
+        if autoReload then
+            local newPlace = game.PlaceId
+
+            if newPlace ~= lastPlace then
+                lastPlace = newPlace
+
+                -- Nettoyage avant reload
+                unloaded = true
+                for k in pairs(toggleStates) do toggleStates[k] = false end
+                if gui and gui.Parent then gui:Destroy() end
+
+                -- Recharge le script depuis ton URL
+                local url = "https://raw.githubusercontent.com/Noamist/WTUtility/refs/heads/main/WTUtility_alpha.lua"
+                local ok, err = pcall(function()
+                    loadstring(game:HttpGet(url))()
+                end)
+
+                if not ok then
+                    warn("AutoReload error:", err)
+                end
+
+                return -- on quitte ce thread, le nouveau script en recréera un
+            end
         end
     end
 end)
+
