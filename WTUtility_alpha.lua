@@ -1,9 +1,15 @@
 -- ============================
 -- CONFIG
 -- ============================
-local TARGET_PATH = {"DroppedChest", "UBot130"}
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Automatically target the correct player folder
+local TARGET_PATH = {"DroppedChest", player.Name}
+
 local PREFIX = "Crate_"
 local TP_COOLDOWN = 1
+
 
 -- ============================
 -- PLACE ID DETECTION
