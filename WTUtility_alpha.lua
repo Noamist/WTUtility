@@ -841,7 +841,7 @@ task.spawn(function()
     while task.wait(1) do
         if autoReload and game.PlaceId ~= initialPlace then
             -- Recharge le script depuis la source originale
-            loadstring(game:HttpGet(""))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Noamist/WTUtility/refs/heads/main/WTUtility_alpha.lua"))()
             break
         end
     end
