@@ -1,9 +1,3 @@
-local url = "https://raw.githubusercontent.com/Noamist/WTUtility/refs/heads/main/WTUtility_alpha.lua"
-
-pcall(function()
-    queue_on_teleport(('loadstring(game:HttpGet("%s"))()'):format(url))
-end)
-
 -- ============================
 -- CONFIG
 -- ============================
