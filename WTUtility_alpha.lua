@@ -817,7 +817,7 @@ Instance.new("UICorner", reloadBtn).CornerRadius = UDim.new(0, 6)
 
 reloadBtn.MouseButton1Click:Connect(function()
     autoReload = not autoReload
-    reloadBtn.Text = autoReload and "Auto Reload: ON" or "Auto Reload: OFF"
+    reloadBtn.Text = autoReload and "Auto Load next time: ON" or "Auto Load next time: OFF"
     reloadBtn.BackgroundColor3 = autoReload
         and Color3.fromRGB(50, 200, 50)
         or  Color3.fromRGB(200, 120, 40)
