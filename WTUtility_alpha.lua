@@ -22,7 +22,8 @@ local PLACE_IDS = {
 }
 
 local currentPlaceId = game.PlaceId
-local currentChapter = PLACE_IDS[currentPlaceId]
+-- Si un chapitre est forcé manuellement via _G.FORCE_CHAPTER, il prend la priorité
+local currentChapter = (type(_G.FORCE_CHAPTER) == "number" and _G.FORCE_CHAPTER) or PLACE_IDS[currentPlaceId]
 local isChapter4 = (currentChapter == 4)
 
 -- ============================
@@ -201,8 +202,8 @@ header.Parent = main
 Instance.new("UICorner", header).CornerRadius = UDim.new(0, 10)
 
 local chapterLabel = currentChapter
-    and ("Chest Utility  —  Ch." .. currentChapter)
-    or  "Chest Utility  —  Ch.???"
+    and ("WT Utility  —  Ch." .. currentChapter)
+    or  "WT Utility  —  Ch.???"
 
 local titleLbl = Instance.new("TextLabel")
 titleLbl.Size = UDim2.new(1, -40, 1, 0)
@@ -486,7 +487,7 @@ if currentChapter == 1 then
     local sec = Instance.new("TextLabel")
     sec.Size = UDim2.new(1, 0, 0, 20)
     sec.BackgroundTransparency = 1
-    sec.Text = "CHAPITRE 1"
+    sec.Text = "CHAPTER 1"
     sec.TextColor3 = Color3.fromRGB(140, 200, 255)
     sec.Font = Enum.Font.GothamBold
     sec.TextSize = 11
@@ -538,7 +539,7 @@ elseif currentChapter == 2 then
     local sec = Instance.new("TextLabel")
     sec.Size = UDim2.new(1, 0, 0, 20)
     sec.BackgroundTransparency = 1
-    sec.Text = "CHAPITRE 2"
+    sec.Text = "CHAPTER 2"
     sec.TextColor3 = Color3.fromRGB(140, 255, 180)
     sec.Font = Enum.Font.GothamBold
     sec.TextSize = 11
@@ -577,7 +578,7 @@ elseif currentChapter == 3 then
     local sec = Instance.new("TextLabel")
     sec.Size = UDim2.new(1, 0, 0, 20)
     sec.BackgroundTransparency = 1
-    sec.Text = "CHAPITRE 3"
+    sec.Text = "CHAPTER 3"
     sec.TextColor3 = Color3.fromRGB(255, 200, 100)
     sec.Font = Enum.Font.GothamBold
     sec.TextSize = 11
@@ -627,7 +628,7 @@ elseif currentChapter == 4 then
     local sec = Instance.new("TextLabel")
     sec.Size = UDim2.new(1, 0, 0, 20)
     sec.BackgroundTransparency = 1
-    sec.Text = "CHAPITRE 4"
+    sec.Text = "CHAPTER 4"
     sec.TextColor3 = Color3.fromRGB(255, 120, 120)
     sec.Font = Enum.Font.GothamBold
     sec.TextSize = 11
@@ -666,6 +667,88 @@ elseif currentChapter == 4 then
         local pp = node:FindFirstChildWhichIsA("ProximityPrompt")
         if pp then fireProximityPrompt(pp) end
     end, 0.3)
+
+    addSeparator(nextOrder())
+
+    -- Auto Collect Ressources (toggle custom : TP sur chaque L6Res_ une par une)
+    do
+        local resKey = "Auto Collect Resources"
+        local resRow = Instance.new("Frame")
+        resRow.Size = UDim2.new(1, 0, 0, 30)
+        resRow.BackgroundTransparency = 1
+        resRow.LayoutOrder = nextOrder()
+        resRow.Parent = scrollMain
+
+        local resLbl = Instance.new("TextLabel")
+        resLbl.Size = UDim2.new(1, -70, 1, 0)
+        resLbl.BackgroundTransparency = 1
+        resLbl.Text = resKey
+        resLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
+        resLbl.Font = Enum.Font.Gotham
+        resLbl.TextSize = 13
+        resLbl.TextXAlignment = Enum.TextXAlignment.Left
+        resLbl.Parent = resRow
+
+        local resTogBtn = Instance.new("TextButton")
+        resTogBtn.Size = UDim2.new(0, 60, 0, 26)
+        resTogBtn.Position = UDim2.new(1, -62, 0, 2)
+        resTogBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        resTogBtn.Text = "OFF"
+        resTogBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        resTogBtn.Font = Enum.Font.GothamBold
+        resTogBtn.TextSize = 13
+        resTogBtn.Parent = resRow
+        Instance.new("UICorner", resTogBtn).CornerRadius = UDim.new(0, 6)
+
+        toggleStates[resKey] = false
+
+        resTogBtn.MouseButton1Click:Connect(function()
+            if unloaded then return end
+            toggleStates[resKey] = not toggleStates[resKey]
+
+            if toggleStates[resKey] then
+                resTogBtn.Text = "ON"
+                resTogBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+
+                task.spawn(function()
+                    while toggleStates[resKey] and not unloaded do
+                        local folder = workspace:FindFirstChild("Resources")
+                        if folder then
+                            -- Collecter tous les objets L6Res_ présents au moment du scan
+                            local resources = {}
+                            for _, obj in ipairs(folder:GetChildren()) do
+                                if obj.Name:sub(1, 6) == "L6Res_" then
+                                    table.insert(resources, obj)
+                                end
+                            end
+
+                            -- TP sur chacun, 1 sec entre chaque
+                            for _, res in ipairs(resources) do
+                                if not toggleStates[resKey] or unloaded then break end
+                                local root = getCharRoot()
+                                if root then
+                                    local part = res:IsA("BasePart") and res
+                                        or (res.PrimaryPart)
+                                        or res:FindFirstChildWhichIsA("BasePart")
+                                    if part then
+                                        root.CFrame = part.CFrame + Vector3.new(0, 3, 0)
+                                    end
+                                end
+                                task.wait(1)
+                            end
+                        else
+                            task.wait(1)
+                        end
+                        -- Petite pause avant de relancer un nouveau cycle
+                        task.wait(0.5)
+                    end
+                end)
+            else
+                resTogBtn.Text = "OFF"
+                resTogBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            end
+        end)
+    end
 
     addSeparator(nextOrder())
 
@@ -785,7 +868,7 @@ else
     local unknownLabel = Instance.new("TextLabel")
     unknownLabel.Size = UDim2.new(1, 0, 0, 40)
     unknownLabel.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
-    unknownLabel.Text = "⚠ Chapitre inconnu"
+    unknownLabel.Text = "⚠ Unknown chapter"
     unknownLabel.TextColor3 = Color3.fromRGB(255, 180, 180)
     unknownLabel.Font = Enum.Font.GothamBold
     unknownLabel.TextSize = 13
@@ -799,39 +882,71 @@ tpListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 end)
 
 -- ============================
--- SETTINGS PAGE (UNLOAD)
+-- SETTINGS PAGE
 -- ============================
--- Auto Reload Script
-local autoReload = false
+local scriptURL = "https://raw.githubusercontent.com/Noamist/WTUtility/refs/heads/main/WTUtility_alpha.lua"
 
-local reloadBtn = Instance.new("TextButton")
-reloadBtn.Size = UDim2.new(1, -20, 0, 30)
-reloadBtn.Position = UDim2.new(0, 10, 0, 50)
-reloadBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 40)
-reloadBtn.Text = "Auto Reload: OFF"
-reloadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-reloadBtn.Font = Enum.Font.GothamBold
-reloadBtn.TextSize = 14
-reloadBtn.Parent = pageSettings
-Instance.new("UICorner", reloadBtn).CornerRadius = UDim.new(0, 6)
+-- ScrollingFrame pour Settings
+local scrollSettings = Instance.new("ScrollingFrame")
+scrollSettings.Size = UDim2.new(1, 0, 1, 0)
+scrollSettings.BackgroundTransparency = 1
+scrollSettings.BorderSizePixel = 0
+scrollSettings.ScrollBarThickness = 4
+scrollSettings.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+scrollSettings.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollSettings.Parent = pageSettings
 
-reloadBtn.MouseButton1Click:Connect(function()
-    autoReload = not autoReload
-    reloadBtn.Text = autoReload and "Auto Load next time: ON" or "Auto Load next time: OFF"
-    reloadBtn.BackgroundColor3 = autoReload
-        and Color3.fromRGB(50, 200, 50)
-        or  Color3.fromRGB(200, 120, 40)
+local settingsLayout = Instance.new("UIListLayout")
+settingsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+settingsLayout.Padding = UDim.new(0, 6)
+settingsLayout.Parent = scrollSettings
+
+local settingsPadding = Instance.new("UIPadding")
+settingsPadding.PaddingLeft   = UDim.new(0, 8)
+settingsPadding.PaddingRight  = UDim.new(0, 8)
+settingsPadding.PaddingTop    = UDim.new(0, 8)
+settingsPadding.PaddingBottom = UDim.new(0, 8)
+settingsPadding.Parent = scrollSettings
+
+settingsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scrollSettings.CanvasSize = UDim2.new(0, 0, 0, settingsLayout.AbsoluteContentSize.Y + 16)
 end)
 
+local function settingsSep(order)
+    local s = Instance.new("Frame")
+    s.Size = UDim2.new(1, 0, 0, 1)
+    s.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    s.BorderSizePixel = 0
+    s.LayoutOrder = order
+    s.Parent = scrollSettings
+end
+
+local function settingsLabel(text, color, order)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 18)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = color or Color3.fromRGB(140, 140, 140)
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 11
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.LayoutOrder = order
+    lbl.Parent = scrollSettings
+    return lbl
+end
+
+-- ---- SECTION : Unload ----
+local sOrder = 0
+
 local unload = Instance.new("TextButton")
-unload.Size = UDim2.new(1, -20, 0, 30)
-unload.Position = UDim2.new(0, 10, 0, 10)
+unload.Size = UDim2.new(1, 0, 0, 30)
 unload.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
 unload.Text = "Unload"
 unload.TextColor3 = Color3.fromRGB(255, 255, 255)
 unload.Font = Enum.Font.GothamBold
 unload.TextSize = 14
-unload.Parent = pageSettings
+unload.LayoutOrder = sOrder ; sOrder = sOrder + 1
+unload.Parent = scrollSettings
 Instance.new("UICorner", unload).CornerRadius = UDim.new(0, 6)
 
 unload.MouseButton1Click:Connect(function()
@@ -841,34 +956,149 @@ unload.MouseButton1Click:Connect(function()
     if gui and gui.Parent then gui:Destroy() end
 end)
 
--- Load in next server
+settingsSep(sOrder) ; sOrder = sOrder + 1
+
+-- ---- SECTION : Load in next server ----
+settingsLabel("NEXT SERVER", Color3.fromRGB(140, 140, 140), sOrder) ; sOrder = sOrder + 1
+
 local loadNext = Instance.new("TextButton")
-loadNext.Size = UDim2.new(1, -20, 0, 30)
-loadNext.Position = UDim2.new(0, 10, 0, 50)
+loadNext.Size = UDim2.new(1, 0, 0, 30)
 loadNext.BackgroundColor3 = Color3.fromRGB(200, 120, 40)
 loadNext.Text = "Load in next server: OFF"
 loadNext.TextColor3 = Color3.fromRGB(255, 255, 255)
 loadNext.Font = Enum.Font.GothamBold
-loadNext.TextSize = 14
-loadNext.Parent = pageSettings
+loadNext.TextSize = 13
+loadNext.LayoutOrder = sOrder ; sOrder = sOrder + 1
+loadNext.Parent = scrollSettings
 Instance.new("UICorner", loadNext).CornerRadius = UDim.new(0, 6)
 
 local loadNextEnabled = false
-local scriptURL = "https://raw.githubusercontent.com/Noamist/WTUtility/refs/heads/main/WTUtility_alpha.lua"
-
 loadNext.MouseButton1Click:Connect(function()
     loadNextEnabled = not loadNextEnabled
-
     loadNext.Text = loadNextEnabled and "Load in next server: ON" or "Load in next server: OFF"
     loadNext.BackgroundColor3 = loadNextEnabled
         and Color3.fromRGB(50, 200, 50)
         or  Color3.fromRGB(200, 120, 40)
-
     if loadNextEnabled then
         pcall(function()
             queue_on_teleport(('loadstring(game:HttpGet("%s"))()'):format(scriptURL))
         end)
     end
+end)
+
+settingsSep(sOrder) ; sOrder = sOrder + 1
+
+-- ---- SECTION : Reload manuel avec chapitre forcé ----
+settingsLabel("RELOAD WITH A SPECIFIC CHAPTER", Color3.fromRGB(140, 180, 255), sOrder) ; sOrder = sOrder + 1
+
+-- Info chapitre actuel
+local currentChInfo = Instance.new("TextLabel")
+currentChInfo.Size = UDim2.new(1, 0, 0, 20)
+currentChInfo.BackgroundTransparency = 1
+currentChInfo.Text = "Active chapter : Ch." .. (currentChapter or "???")
+    .. (currentChapter == nil and "  ⚠ unrecognized" or "")
+currentChInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
+currentChInfo.Font = Enum.Font.Gotham
+currentChInfo.TextSize = 12
+currentChInfo.TextXAlignment = Enum.TextXAlignment.Left
+currentChInfo.LayoutOrder = sOrder ; sOrder = sOrder + 1
+currentChInfo.Parent = scrollSettings
+
+-- Sélecteur : 4 boutons Ch.1 … Ch.4 sur une ligne
+local chapterRow = Instance.new("Frame")
+chapterRow.Size = UDim2.new(1, 0, 0, 32)
+chapterRow.BackgroundTransparency = 1
+chapterRow.LayoutOrder = sOrder ; sOrder = sOrder + 1
+chapterRow.Parent = scrollSettings
+
+local chRowLayout = Instance.new("UIListLayout")
+chRowLayout.FillDirection = Enum.FillDirection.Horizontal
+chRowLayout.Padding = UDim.new(0, 4)
+chRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+chRowLayout.Parent = chapterRow
+
+local CHAPTER_COLORS = {
+    [1] = Color3.fromRGB(60, 100, 160),
+    [2] = Color3.fromRGB(40, 130, 80),
+    [3] = Color3.fromRGB(160, 110, 30),
+    [4] = Color3.fromRGB(160, 50, 50),
+}
+local CHAPTER_COLORS_SEL = {
+    [1] = Color3.fromRGB(100, 160, 255),
+    [2] = Color3.fromRGB(80, 220, 130),
+    [3] = Color3.fromRGB(255, 180, 50),
+    [4] = Color3.fromRGB(255, 90, 90),
+}
+
+local selectedChapter = currentChapter or 1
+local chapterBtns = {}
+
+for i = 1, 4 do
+    local cb = Instance.new("TextButton")
+    cb.Size = UDim2.new(0.23, -3, 1, 0)
+    cb.BackgroundColor3 = (selectedChapter == i)
+        and CHAPTER_COLORS_SEL[i] or CHAPTER_COLORS[i]
+    cb.Text = "Ch." .. i
+    cb.TextColor3 = Color3.fromRGB(255, 255, 255)
+    cb.Font = Enum.Font.GothamBold
+    cb.TextSize = 13
+    cb.LayoutOrder = i
+    cb.Parent = chapterRow
+    Instance.new("UICorner", cb).CornerRadius = UDim.new(0, 6)
+    chapterBtns[i] = cb
+
+    cb.MouseButton1Click:Connect(function()
+        selectedChapter = i
+        for j = 1, 4 do
+            chapterBtns[j].BackgroundColor3 = (selectedChapter == j)
+                and CHAPTER_COLORS_SEL[j] or CHAPTER_COLORS[j]
+        end
+    end)
+end
+
+-- Bouton Reload
+local reloadWithChBtn = Instance.new("TextButton")
+reloadWithChBtn.Size = UDim2.new(1, 0, 0, 34)
+reloadWithChBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 180)
+reloadWithChBtn.Text = "🔄  Reload — Ch." .. selectedChapter
+reloadWithChBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+reloadWithChBtn.Font = Enum.Font.GothamBold
+reloadWithChBtn.TextSize = 14
+reloadWithChBtn.LayoutOrder = sOrder ; sOrder = sOrder + 1
+reloadWithChBtn.Parent = scrollSettings
+Instance.new("UICorner", reloadWithChBtn).CornerRadius = UDim.new(0, 6)
+
+-- Mettre à jour le label du bouton quand on change le chapitre sélectionné
+for i = 1, 4 do
+    chapterBtns[i].MouseButton1Click:Connect(function()
+        reloadWithChBtn.Text = "🔄  Reload — Ch." .. selectedChapter
+    end)
+end
+
+reloadWithChBtn.MouseButton1Click:Connect(function()
+    -- Arrêter proprement tous les toggles
+    unloaded = true
+    scanning = false
+    for k in pairs(toggleStates) do toggleStates[k] = false end
+
+    -- Injecter le chapitre forcé et relancer le script
+    task.spawn(function()
+        task.wait(0.05) -- laisser les boucles s'arrêter
+        local forceChapter = selectedChapter
+        local code = string.format(
+            '_G.FORCE_CHAPTER = %d; loadstring(game:HttpGet("%s"))()',
+            forceChapter, scriptURL
+        )
+        local ok, err = pcall(loadstring, code)
+        if ok then
+            -- exécution directe si loadstring est disponible
+            loadstring(code)()
+        end
+        -- Détruire l'ancien GUI après le lancement
+        if gui and gui.Parent then
+            gui:Destroy()
+        end
+    end)
 end)
 
 
