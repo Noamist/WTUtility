@@ -1,322 +1,215 @@
 
-/**
- * @name DiscordTimestampLogger
- * @author OpenAI
- * @version 1.0.0
- * @description Enregistre les timestamps des messages envoyés et des réponses des bots dans un fichier TXT.
- */
+(vendetta) => {
+    const state = {
+        dispatcher: null,
+        callback: null,
+        userId: null,
+        pending: new Map(),
+        rows: [],
+        active: false
+    };
 
-module.exports = class DiscordTimestampLogger {
-    constructor() {
-        this.pluginName = "DiscordTimestampLogger";
-        this.dispatcher = null;
-        this.callback = null;
-        this.myUserId = null;
-        this.pending = new Map();
-        this.rows = [];
-        this.started = false;
+    const log = (...args) =>
+        console.log("[DiscordTimestampLogger]", ...args);
+
+    function timestampOf(message) {
+        const value = message?.timestamp;
+        const result = value instanceof Date
+            ? value.getTime()
+            : typeof value === "number"
+                ? (value < 1e12 ? value * 1000 : value)
+                : Date.parse(value);
+
+        return Number.isFinite(result) ? result : Date.now();
     }
 
-    showToast(message, type = "info") {
-        try {
-            BdApi.UI.showToast(message, {
-                type,
-                timeout: type === "error" ? 5000 : 2500
-            });
-        } catch (error) {
-            console.log("[DiscordTimestampLogger]", message);
-        }
-    }
-
-    start() {
-        try {
-            const W = BdApi.Webpack;
-            const messageStore = W.getStore("MessageStore");
-
-            this.dispatcher = messageStore?._dispatcher;
-
-            if (
-                !this.dispatcher ||
-                typeof this.dispatcher.subscribe !== "function" ||
-                typeof this.dispatcher.unsubscribe !== "function"
-            ) {
-                throw new Error(
-                    "Dispatcher introuvable dans MessageStore."
-                );
-            }
-
-            const userStore = W.getStore("UserStore");
-            const currentUser = userStore?.getCurrentUser?.();
-
-            if (!currentUser?.id) {
-                throw new Error(
-                    "Impossible de récupérer ton identifiant Discord."
-                );
-            }
-
-            this.myUserId = currentUser.id;
-
-            this.callback = action => {
-                try {
-                    this.handleMessage(action);
-                } catch (error) {
-                    console.error(
-                        "[DiscordTimestampLogger] Erreur de traitement :",
-                        error
-                    );
-                }
-            };
-
-            this.dispatcher.subscribe("MESSAGE_CREATE", this.callback);
-            this.started = true;
-
-            // Fonction d'export accessible dans la console Discord.
-            window.DiscordTimestampLoggerExport = () => this.exportTXT();
-
-            this.showToast("Logger de timestamps activé", "success");
-
-            console.log(
-                "[DiscordTimestampLogger] Actif.",
-                "Compte :", this.myUserId,
-                "| Pour exporter : DiscordTimestampLoggerExport()"
-            );
-        } catch (error) {
-            console.error(
-                "[DiscordTimestampLogger] Erreur de démarrage :",
-                error
-            );
-
-            this.showToast(
-                "Échec du démarrage : " + error.message,
-                "error"
-            );
-
-            this.stop();
-        }
-    }
-
-    getTimestamp(message) {
-        const timestamp = message?.timestamp;
-
-        if (
-            timestamp instanceof Date &&
-            Number.isFinite(timestamp.getTime())
-        ) {
-            return timestamp.getTime();
-        }
-
-        if (
-            typeof timestamp === "number" &&
-            Number.isFinite(timestamp)
-        ) {
-            return timestamp < 100000000000
-                ? Math.round(timestamp * 1000)
-                : Math.round(timestamp);
-        }
-
-        if (typeof timestamp === "string") {
-            const parsed = Date.parse(timestamp);
-
-            if (Number.isFinite(parsed)) {
-                return parsed;
-            }
-        }
-
-        return Date.now();
-    }
-
-    handleMessage(action) {
+    function handleMessage(action) {
         const message = action?.message;
-
         if (!message) return;
 
         const channelId =
-            message.channel_id ||
-            message.channelId ||
-            action?.channelId;
-
+            message.channel_id || message.channelId || action.channelId;
         const authorId =
-            message.author?.id ||
-            message.author_id ||
-            message.authorId;
+            message.author?.id || message.author_id || message.authorId;
 
         if (!channelId || !authorId) return;
 
-        const timestampMs = this.getTimestamp(message);
+        const time = timestampOf(message);
 
-        // Enregistrement d'un message envoyé par ton compte.
-        if (authorId === this.myUserId) {
-            if (!this.pending.has(channelId)) {
-                this.pending.set(channelId, []);
+        if (authorId === state.userId) {
+            if (!state.pending.has(channelId)) {
+                state.pending.set(channelId, []);
             }
 
-            this.pending.get(channelId).push({
+            state.pending.get(channelId).push({
                 channelId,
                 messageId: message.id || "",
-                sentMs: timestampMs
+                sentMs: time
             });
 
-            console.log(
-                "[DiscordTimestampLogger] Message envoyé détecté :",
-                new Date(timestampMs).toISOString()
-            );
-
+            log("Message envoyé détecté", channelId, time);
             return;
         }
 
-        // Ne conserve que les réponses provenant de comptes bots.
         if (message.author?.bot !== true) return;
 
-        const queue = this.pending.get(channelId);
+        const queue = state.pending.get(channelId);
+        if (!queue?.length) return;
 
-        if (!queue || queue.length === 0) return;
-
-        // Recherche du message auquel le bot répond, si disponible.
-        const referencedId =
+        const reference =
             message.message_reference?.message_id ||
             message.messageReference?.message_id;
 
         let index = 0;
-
-        if (referencedId) {
-            const match = queue.findIndex(
-                entry => entry.messageId === referencedId
+        if (reference) {
+            const found = queue.findIndex(
+                item => item.messageId === reference
             );
-
-            if (match !== -1) {
-                index = match;
-            }
+            if (found !== -1) index = found;
         }
 
         const sent = queue.splice(index, 1)[0];
+        if (!queue.length) state.pending.delete(channelId);
 
-        if (queue.length === 0) {
-            this.pending.delete(channelId);
-        }
-
-        this.recordPair(
-            sent,
-            message,
-            authorId,
-            timestampMs
-        );
-    }
-
-    recordPair(sent, reply, botId, replyMs) {
-        const delayMs = replyMs - sent.sentMs;
-
+        const replyMs = time;
         const row = {
-            channelId: sent.channelId,
+            channelId,
             messageId: sent.messageId,
-            replyMessageId: reply.id || "",
-            botId,
+            replyMessageId: message.id || "",
+            botId: authorId,
             sentISO: new Date(sent.sentMs).toISOString(),
             sentMs: sent.sentMs,
             replyISO: new Date(replyMs).toISOString(),
             replyMs,
-            delayMs
+            delayMs: replyMs - sent.sentMs
         };
 
-        this.rows.push(row);
-
-        console.log(
-            "[DiscordTimestampLogger] Paire enregistrée :",
-            row
-        );
-
-        this.showToast(
-            `Réponse enregistrée : ${delayMs} ms`,
-            "success"
-        );
+        state.rows.push(row);
+        log("Paire enregistrée", row);
     }
 
-    exportTXT() {
+    function makeTXT() {
+        const header = [
+            "channel_id",
+            "message_id",
+            "reply_message_id",
+            "bot_id",
+            "envoi_iso",
+            "envoi_unix_ms",
+            "reponse_iso",
+            "reponse_unix_ms",
+            "delai_ms"
+        ].join("\t");
+
+        const lines = state.rows.map(row => [
+            row.channelId,
+            row.messageId,
+            row.replyMessageId,
+            row.botId,
+            row.sentISO,
+            row.sentMs,
+            row.replyISO,
+            row.replyMs,
+            row.delayMs
+        ].join("\t"));
+
+        return [header, ...lines].join("\n") + "\n";
+    }
+
+    async function exportTXT() {
         try {
-            const header = [
-                "channel_id",
-                "message_id",
-                "reply_message_id",
-                "bot_id",
-                "envoi_iso",
-                "envoi_unix_ms",
-                "reponse_iso",
-                "reponse_unix_ms",
-                "delai_ms"
-            ].join("\t");
+            const common = vendetta.metro?.common;
+            const RN = common?.ReactNative;
+            const Share = RN?.Share;
 
-            const lines = this.rows.map(row => [
-                row.channelId,
-                row.messageId,
-                row.replyMessageId,
-                row.botId,
-                row.sentISO,
-                row.sentMs,
-                row.replyISO,
-                row.replyMs,
-                row.delayMs
-            ].join("\t"));
+            if (!Share?.share) {
+                throw new Error("Le menu de partage iOS est indisponible.");
+            }
 
-            const content = [header, ...lines].join("\r\n") + "\r\n";
+            await Share.share({
+                title: "DiscordTimestampLogger.txt",
+                message: makeTXT()
+            });
 
-            const blob = new Blob(
-                ["\uFEFF", content],
-                { type: "text/plain;charset=utf-8" }
-            );
-
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-
-            link.href = url;
-            link.download = "DiscordTimestampLogger.txt";
-
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-
-            setTimeout(() => URL.revokeObjectURL(url), 1500);
-
-            this.showToast(
-                `Export effectué : ${this.rows.length} paire(s)`,
-                "success"
-            );
+            log("Export demandé", state.rows.length, "paires");
         } catch (error) {
-            console.error(
-                "[DiscordTimestampLogger] Erreur d'export :",
-                error
-            );
-
-            this.showToast(
-                "Échec de l'export : " + error.message,
-                "error"
-            );
+            log("Erreur d'export", error);
         }
     }
 
-    stop() {
-        if (this.dispatcher && this.callback) {
+    function start() {
+        try {
+            const metro = vendetta.metro;
+            const findByProps = metro?.findByProps;
+            const findByStoreName = metro?.findByStoreName;
+
+            if (!findByProps) {
+                throw new Error("API Metro indisponible.");
+            }
+
+            const userStore = findByStoreName?.("UserStore")
+                || findByProps("getCurrentUser");
+
+            const currentUser = userStore?.getCurrentUser?.();
+            if (!currentUser?.id) {
+                throw new Error("Utilisateur courant introuvable.");
+            }
+
+            const dispatcher = findByProps("_currentDispatchActionType");
+            if (
+                !dispatcher ||
+                typeof dispatcher.subscribe !== "function" ||
+                typeof dispatcher.unsubscribe !== "function"
+            ) {
+                throw new Error("Dispatcher Discord introuvable.");
+            }
+
+            state.userId = currentUser.id;
+            state.dispatcher = dispatcher;
+            state.callback = action => {
+                try {
+                    handleMessage(action);
+                } catch (error) {
+                    log("Erreur de traitement", error);
+                }
+            };
+
+            dispatcher.subscribe("MESSAGE_CREATE", state.callback);
+            state.active = true;
+
+            // Fonction d'export accessible depuis la console de débogage.
+            window.DiscordTimestampLoggerExport = exportTXT;
+            window.DiscordTimestampLoggerGetData = makeTXT;
+
+            log("Plugin activé. Paires enregistrées :", state.rows.length);
+        } catch (error) {
+            log("Impossible de démarrer le plugin", error);
+            stop();
+        }
+    }
+
+    function stop() {
+        if (state.dispatcher && state.callback) {
             try {
-                this.dispatcher.unsubscribe(
+                state.dispatcher.unsubscribe(
                     "MESSAGE_CREATE",
-                    this.callback
+                    state.callback
                 );
             } catch (error) {
-                console.error(
-                    "[DiscordTimestampLogger] Désabonnement impossible :",
-                    error
-                );
+                log("Erreur de désabonnement", error);
             }
         }
 
-        if (window.DiscordTimestampLoggerExport) {
-            delete window.DiscordTimestampLoggerExport;
-        }
+        delete window.DiscordTimestampLoggerExport;
+        delete window.DiscordTimestampLoggerGetData;
 
-        this.dispatcher = null;
-        this.callback = null;
-        this.started = false;
-
-        this.pending.clear();
-
-        console.log("[DiscordTimestampLogger] Arrêté.");
+        state.dispatcher = null;
+        state.callback = null;
+        state.active = false;
     }
-};
+
+    return {
+        onLoad: start,
+        onUnload: stop
+    };
+}
