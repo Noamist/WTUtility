@@ -1,0 +1,12 @@
+
+{
+  "name": "DiscordTimestampLogger",
+  "description": "Enregistre les horodatages des messages envoyés et des réponses dans un journal.",
+  "authors": [
+    {
+      "name": "OpenAI"
+    }
+  ],
+  "main": "index.js",
+  "version": "1.0.0"
+}
