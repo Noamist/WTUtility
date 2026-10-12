@@ -1,7 +1,6 @@
-
 {
   "name": "DiscordTimestampLogger",
-  "description": "Enregistre les horodatages des messages envoyés et des réponses dans un journal.",
+  "description": "Enregistre les horodatages des messages et les délais de réponse des bots.",
   "authors": [
     {
       "name": "OpenAI"
